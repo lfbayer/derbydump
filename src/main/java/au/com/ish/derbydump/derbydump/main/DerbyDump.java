@@ -20,8 +20,10 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.net.URL;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -122,15 +124,15 @@ public class DerbyDump
                     ResultSet dataRows = statement.executeQuery(table.getSelectQuery(schema));
                     int rowCount = 0;
 
+                    if (config.getTruncateTables())
+                    {
+                        output.println("DELETE FROM " + table.getTableName() + ";");
+                    }
+
                     // check that we have at least one row
                     if (dataRows.first())
                     {
                         dataRows.beforeFirst();
-
-                        if (config.getTruncateTables())
-                        {
-                            output.println("DELETE FROM " + table.getTableName() + ";");
-                        }
 
                         output.println(table.getInsertSQL());
 
@@ -194,6 +196,23 @@ public class DerbyDump
         }
 
         output.println("SET CONSTRAINTS ALL IMMEDIATE;");
+
+        URL cleanup = getClass().getResource("/cleanup.sql");
+        try (InputStream in = cleanup.openStream())
+        {
+            LOGGER.info("Writing cleanup procedures");
+
+            byte[] buf = new byte[2048];
+            int len;
+            while ((len = in.read(buf)) > 0)
+            {
+                output.write(buf, 0, len);
+            }
+        }
+        catch (IOException e)
+        {
+            throw new RuntimeException("Error reading cleanup.sql", e);
+        }
 
         output.flush();
 

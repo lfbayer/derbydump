@@ -112,7 +112,7 @@ public class Column {
 			
 			case Types.SMALLINT: {
 				Object obj = dataRow.getObject(columnName);
-				return (obj == null) ? "NULL" : obj.toString();
+				return (obj == null) ? "NULL" : "'" + obj.toString() + "'";
 			}
 			
 			case Types.BIGINT: {
@@ -177,7 +177,7 @@ public class Column {
 		}
 		byte[] bytes = blob.getBytes(1L, blobLength);
 
-		return "0x"+new String(Hex.encodeHex(bytes)).toUpperCase();
+		return "decode('"+new String(Hex.encodeHex(bytes)).toUpperCase()+"', 'hex')";
 	}
 
 	/**

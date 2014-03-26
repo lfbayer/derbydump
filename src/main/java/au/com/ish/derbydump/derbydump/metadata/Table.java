@@ -101,7 +101,7 @@ public class Table {
 	 * @return the tableName
 	 */
 	public String getTableName() {
-		return config.rewriteTableName(tableName);
+		return tableName;
 	}
 
 	/**

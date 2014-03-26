@@ -1,5 +1,11 @@
-# derbydump
 
+
+## Notes on this fork
+
+
+This fork of ari/derbydump basically just changes the output to be postgresql compatible syntax. It works against the specific database it was modified to work against, so there is no guarantee that it will work against your own postgres install.
+
+# derbydump
 
 Derby SQL dump. This project will take a Derby database and export the data in it to a file. It is similar, but not feature parity, to the mysqldump executable.
 

@@ -27,11 +27,9 @@ import java.util.Properties;
  */
 public class Configuration
 {
-
-    private static Configuration configuration;
     private Properties prop;
 
-    private Configuration()
+    public Configuration()
     {
         prop = System.getProperties();
 
@@ -51,51 +49,9 @@ public class Configuration
         }
     }
 
-    public static synchronized Configuration getConfiguration()
-    {
-        if (configuration == null)
-        {
-            configuration = new Configuration();
-        }
-        return configuration;
-    }
-
     public String getDerbyUrl()
     {
-        String url = prop.getProperty("db.url");
-        if (url != null)
-        {
-            return url;
-        }
-
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append("jdbc:derby:");
-        stringBuilder.append(getDerbyDbPath());
-        stringBuilder.append(";create=false;");
-        stringBuilder.append("user=").append(getUserName()).append(";");
-        stringBuilder.append("password=").append(getPassword()).append(";");
-
-        return stringBuilder.toString();
-    }
-
-    public String getUserName()
-    {
-        return prop.getProperty("db.userName");
-    }
-
-    public String getPassword()
-    {
-        return prop.getProperty("db.password", "");
-    }
-
-    public String getDriverClassName()
-    {
-        return prop.getProperty("db.driverClassName", "org.apache.derby.jdbc.EmbeddedDriver");
-    }
-
-    public String getDerbyDbPath()
-    {
-        return prop.getProperty("db.derbyDbPath");
+        return prop.getProperty("db.url");
     }
 
     public String getSchemaName()

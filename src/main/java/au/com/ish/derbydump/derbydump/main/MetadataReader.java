@@ -16,19 +16,23 @@
 
 package au.com.ish.derbydump.derbydump.main;
 
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
+
 import au.com.ish.derbydump.derbydump.metadata.Column;
 import au.com.ish.derbydump.derbydump.metadata.Database;
 import au.com.ish.derbydump.derbydump.metadata.MetaDataColumnDescriptor;
 import au.com.ish.derbydump.derbydump.metadata.Table;
-import org.apache.log4j.Logger;
-
-import java.sql.*;
-import java.util.*;
-import java.util.regex.Pattern;
 
 public class MetadataReader {
-	private static final Logger LOGGER = Logger.getLogger(MetadataReader.class);
-
     private final Pattern searchStringPattern = Pattern.compile("[_%]");
     private static final List<MetaDataColumnDescriptor> columnsForColumn;
     private static final List<MetaDataColumnDescriptor> _columnsForTable;
@@ -66,13 +70,13 @@ public class MetadataReader {
             while (tables.next()) {
                 Map values = readMetaData(tables, _columnsForTable);
                 Table table = readTable(dmd, values);
-				LOGGER.debug("Found table: " + table.getTableName());
+                System.err.println("Found table: " + table.getTableName());
 
 				database.addTable(table);
             }
         }
         catch(SQLException e){
-            LOGGER.error(e);
+            throw new RuntimeException(e);
         }
         return database;
     }

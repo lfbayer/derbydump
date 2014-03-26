@@ -31,7 +31,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 
-import org.apache.log4j.Logger;
+import org.apache.derby.jdbc.EmbeddedDriver;
 
 import au.com.ish.derbydump.derbydump.config.Configuration;
 import au.com.ish.derbydump.derbydump.metadata.Column;
@@ -40,8 +40,6 @@ import au.com.ish.derbydump.derbydump.metadata.Table;
 
 public class DerbyDump
 {
-    private static final Logger LOGGER = Logger.getLogger(DerbyDump.class);
-
     private final static int MAX_ALLOWED_ROWS = 100;
     private final PrintStream output;
 
@@ -51,8 +49,6 @@ public class DerbyDump
     {
         this.output = new PrintStream(output);
         this.config = config;
-
-        LOGGER.debug("Database reader initializing...");
     }
 
     public void execute()
@@ -64,17 +60,9 @@ public class DerbyDump
     {
         // creating a skeleton of tables and columns present in the database
         MetadataReader metadata = new MetadataReader();
-        LOGGER.debug("Resolving database structure...");
+        System.err.println("Resolving database structure...");
 
-        try
-        {
-            Class.forName(config.getDriverClassName()).newInstance();
-        }
-        catch (InstantiationException | IllegalAccessException | ClassNotFoundException e)
-        {
-            LOGGER.error("Error creating initial connection", e);
-            throw new RuntimeException(e);
-        }
+        new EmbeddedDriver();
 
         try (Connection connection = DriverManager.getConnection(config.getDerbyUrl()))
         {
@@ -83,7 +71,8 @@ public class DerbyDump
         }
         catch (SQLException e)
         {
-            LOGGER.error("Could not close database connection :" + e.getErrorCode() + " - " + e.getMessage(), e);
+            System.err.println("Could not close database connection :" + e.getErrorCode() + " - " + e.getMessage());
+            throw new RuntimeException(e);
         }
     }
 
@@ -97,7 +86,7 @@ public class DerbyDump
      */
     private void getInternalData(List<Table> tables, Connection connection, String schema)
     {
-        LOGGER.debug("Fetching database data...");
+        System.err.println("Fetching database data...");
 
         output.println("SET CONSTRAINTS ALL DEFERRED;");
 
@@ -116,7 +105,7 @@ public class DerbyDump
             if (!table.isExcluded())
             {
                 List<Column> columns = table.getColumns();
-                LOGGER.info("Table " + table.getTableName() + "...");
+                System.err.println("Table " + table.getTableName() + "...");
 
                 try
                 {
@@ -176,11 +165,12 @@ public class DerbyDump
                         statement.close();
                     }
 
-                    LOGGER.info("Exported " + table.getTableName() + ". " + rowCount + " rows.");
+                    System.err.println("Exported " + table.getTableName() + ". " + rowCount + " rows.");
                 }
                 catch (SQLException e)
                 {
-                    LOGGER.error("Error: " + e.getErrorCode() + " - " + e.getMessage(), e);
+                    System.err.println("Error: " + e.getErrorCode() + " - " + e.getMessage());
+                    throw new RuntimeException(e);
                 }
             }
         }
@@ -200,7 +190,7 @@ public class DerbyDump
         URL cleanup = getClass().getResource("/cleanup.sql");
         try (InputStream in = cleanup.openStream())
         {
-            LOGGER.info("Writing cleanup procedures");
+            System.err.println("Writing cleanup procedures");
 
             byte[] buf = new byte[2048];
             int len;
@@ -216,25 +206,24 @@ public class DerbyDump
 
         output.flush();
 
-        LOGGER.debug("Reading done.");
+        System.err.println("Reading done.");
     }
 
     public static void main(String[] args)
     {
-        Configuration config = Configuration.getConfiguration();
+        Configuration config = new Configuration();
 
-        LOGGER.debug("Configuration:");
-        LOGGER.debug("\tuser =" + config.getUserName());
-        LOGGER.debug("\tpassword =" + config.getPassword());
-        LOGGER.debug("\tderbyDbPath =" + config.getDerbyDbPath());
-        LOGGER.debug("\tdriverName =" + config.getDriverClassName());
-        LOGGER.debug("\tschema =" + config.getSchemaName());
-        LOGGER.debug("\toutput file path =" + config.getOutputFilePath());
-        LOGGER.debug("\ttruncate tables =" + config.getTruncateTables());
+        if (config.getDerbyUrl() == null)
+        {
+            System.err.println("No db.url specified!");
+            System.exit(1);
+            return;
+        }
 
         if (config.getSchemaName() == null)
         {
-            LOGGER.error("No schema specified!");
+            System.err.println("No db.schemaName specified!");
+            System.exit(1);
             return;
         }
 
@@ -257,7 +246,9 @@ public class DerbyDump
                 }
                 catch (FileNotFoundException e)
                 {
-                    LOGGER.error("File not found: " + file, e);
+                    System.err.println("File not found: " + file);
+                    e.printStackTrace();
+                    System.exit(1);
                     return;
                 }
             }
@@ -275,7 +266,9 @@ public class DerbyDump
                 }
                 catch (IOException e)
                 {
-                    LOGGER.error("Error closing output", e);
+                    System.err.println("Error closing output");
+                    e.printStackTrace();
+                    System.exit(1);
                 }
             }
         }

@@ -31,6 +31,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.derby.jdbc.EmbeddedDriver;
 
 import au.com.ish.derbydump.derbydump.config.Configuration;
@@ -51,12 +52,12 @@ public class DerbyDump
         this.config = config;
     }
 
-    public void execute()
+    public void execute() throws IOException, SQLException
     {
         readMetaData(config.getSchemaName());
     }
 
-    void readMetaData(String schema)
+    void readMetaData(String schema) throws IOException, SQLException
     {
         // creating a skeleton of tables and columns present in the database
         MetadataReader metadata = new MetadataReader();
@@ -69,11 +70,6 @@ public class DerbyDump
             Database database = metadata.readDatabase(connection);
             getInternalData(database.getTables(), connection, schema);
         }
-        catch (SQLException e)
-        {
-            System.err.println("Could not close database connection :" + e.getErrorCode() + " - " + e.getMessage());
-            throw new RuntimeException(e);
-        }
     }
 
     /**
@@ -83,8 +79,10 @@ public class DerbyDump
      * @param tables A list of tables to read from
      * @param connection The database connection used to fetch the data
      * @param schema The name of the schema we are using
+     * @throws SQLException 
+     * @throws IOException 
      */
-    private void getInternalData(List<Table> tables, Connection connection, String schema)
+    private void getInternalData(List<Table> tables, Connection connection, String schema) throws SQLException, IOException
     {
         System.err.println("Fetching database data...");
 
@@ -107,11 +105,8 @@ public class DerbyDump
                 List<Column> columns = table.getColumns();
                 System.err.println("Table " + table.getTableName() + "...");
 
-                try
-                {
-                    Statement statement = connection.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
+                    Statement statement = connection.createStatement();
                     ResultSet dataRows = statement.executeQuery(table.getSelectQuery(schema));
-                    int rowCount = 0;
 
                     if (config.getTruncateTables())
                     {
@@ -119,59 +114,46 @@ public class DerbyDump
                     }
 
                     // check that we have at least one row
-                    if (dataRows.first())
+                    int rowCount = 0;
+                    while (dataRows.next())
                     {
-                        dataRows.beforeFirst();
-
-                        output.println(table.getInsertSQL());
-
-                        while (dataRows.next())
+                        if (rowCount % MAX_ALLOWED_ROWS == 0)
                         {
-                            output.print("(");
-
-                            boolean firstColumn = true;
-                            for (Column column : columns)
-                            {
-                                if (firstColumn)
-                                {
-                                    firstColumn = false;
-                                }
-                                else
-                                {
-                                    output.print(",");
-                                }
-                                output.print(column.toString(dataRows));
-                            }
-                            rowCount++;
-                            output.print(")");
-
-                            if (!dataRows.isLast())
-                            {
-                                if (rowCount % MAX_ALLOWED_ROWS == 0)
-                                {
-                                    output.println(";");
-                                    output.println(table.getInsertSQL());
-                                }
-                                else
-                                {
-                                    output.println(",");
-                                }
-                            }
+                            output.println(";");
+                            output.println(table.getInsertSQL());
+                        }
+                        else
+                        {
+                            output.println(",");
                         }
 
-                        output.println(";");
+                        rowCount++;
+                        output.print("(");
 
-                        dataRows.close();
-                        statement.close();
+                        boolean firstColumn = true;
+                        for (Column column : columns)
+                        {
+                            if (firstColumn)
+                            {
+                                firstColumn = false;
+                            }
+                            else
+                            {
+                                output.print(",");
+                            }
+
+                            column.toString(dataRows, output);
+                        }
+
+                        output.print(")");
                     }
 
+                    output.println(";");
+
+                    dataRows.close();
+                    statement.close();
+
                     System.err.println("Exported " + table.getTableName() + ". " + rowCount + " rows.");
-                }
-                catch (SQLException e)
-                {
-                    System.err.println("Error: " + e.getErrorCode() + " - " + e.getMessage());
-                    throw new RuntimeException(e);
-                }
             }
         }
 
@@ -192,12 +174,7 @@ public class DerbyDump
         {
             System.err.println("Writing cleanup procedures");
 
-            byte[] buf = new byte[2048];
-            int len;
-            while ((len = in.read(buf)) > 0)
-            {
-                output.write(buf, 0, len);
-            }
+            IOUtils.copy(in, output);
         }
         catch (IOException e)
         {
@@ -255,6 +232,12 @@ public class DerbyDump
 
             DerbyDump dd = new DerbyDump(output, config);
             dd.execute();
+        }
+        catch (Throwable e)
+        {
+            System.err.println("Error performing export");
+            e.printStackTrace();
+            System.exit(1);
         }
         finally
         {

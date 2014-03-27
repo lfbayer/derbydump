@@ -17,10 +17,12 @@
 package au.com.ish.derbydump.derbydump.metadata;
 
 import java.io.BufferedReader;
+import java.io.EOFException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintStream;
 import java.io.Reader;
 import java.math.BigDecimal;
-import java.sql.Blob;
 import java.sql.Clob;
 import java.sql.Date;
 import java.sql.ResultSet;
@@ -77,84 +79,135 @@ public class Column {
 	 * 
 	 * @param dataRow The row which we are exporting
 	 * @return an SQL statement compliant string version of the value
+	 * @throws IOException 
 	 */
-	public String toString(ResultSet dataRow) throws SQLException {
+	public void toString(ResultSet dataRow, PrintStream output) throws SQLException, IOException {
 
 		switch (getColumnDataType()) {
 			case Types.BINARY:
 			case Types.VARBINARY:
 			case Types.BLOB: {
-				Blob obj = dataRow.getBlob(columnName);
-				return (obj == null) ? "NULL" : processBinaryData(obj);
+				InputStream obj = dataRow.getBinaryStream(columnName);
+				processBinaryData(obj, output);
+				return;
 			}
-			
+
 			case Types.CLOB: {
 				Clob obj = dataRow.getClob(columnName);
-				return (obj == null) ? "NULL" : processClobData(obj);
+				processClobData(obj, output);
+				return;
 			}
-			
+
 			case Types.CHAR:
 			case Types.LONGNVARCHAR:
 			case Types.VARCHAR: {
 				String obj = dataRow.getString(columnName);
-				return (obj == null) ? "NULL" : processStringData(obj);
+				processStringData(obj, output);
+				return;
 			}
-			
+
 			case Types.TIME: {
 				Time obj = dataRow.getTime(columnName);
-				return (obj == null) ? "NULL" : processStringData(obj.toString());
+				processStringData(obj, output);
+				return;
 			}
-			
+
 			case Types.DATE: {
 				Date obj = dataRow.getDate(columnName);
-				return (obj == null) ? "NULL" : processStringData(obj.toString());
+				processStringData(obj, output);
+				return;
 			}
 			
 			case Types.TIMESTAMP: {
 				Timestamp obj = dataRow.getTimestamp(columnName);
-				return (obj == null) ? "NULL" : processStringData(obj.toString());
+				processStringData(obj, output);
+				return;
 			}
-			
+
 			case Types.SMALLINT: {
 				Object obj = dataRow.getObject(columnName);
-				return (obj == null) ? "NULL" : "'" + obj.toString() + "'";
+				if (obj == null)
+				{
+				    output.print("NULL");
+				}
+				else
+				{
+				    output.print("'");
+				    output.print(obj.toString());
+				    output.print("'");
+				}
+				return;
 			}
-			
+
 			case Types.BIGINT: {
 				Object obj = dataRow.getObject(columnName);
-				return (obj == null) ? "NULL" : obj.toString();
+				nullOrToString(obj, output);
+				return;
 			}
-			
+
 			case Types.INTEGER: {
 				Object obj = dataRow.getObject(columnName);
-				return (obj == null) ? "NULL" : obj.toString();
+				nullOrToString(obj, output);
+                return;
 			}
 			
 			case Types.NUMERIC:
 			case Types.DECIMAL: {
 				BigDecimal obj = dataRow.getBigDecimal(columnName);
-				return (obj == null) ? "NULL" : String.valueOf(obj);
+				nullOrToString(obj, output);
+                return;
 			}
-			
+
 			case Types.REAL:
 			case Types.FLOAT: {
 				Float obj = dataRow.getFloat(columnName);
 				// dataRow.getFloat() always returns a value. only way to check the null is wasNull() method
-				return (dataRow.wasNull()) ? "NULL" : String.valueOf(obj);
+				
+				if (dataRow.wasNull())
+		        {
+		            output.print("NULL");
+		        }
+		        else
+		        {
+		            output.print(obj.toString());
+		        }
+
+				return;
 			}
-			
+
 			case Types.DOUBLE: {
 				Double obj = dataRow.getDouble(columnName);
-				return (dataRow.wasNull()) ? "NULL" : String.valueOf(obj);
+				if (dataRow.wasNull())
+		        {
+		            output.print("NULL");
+		        }
+		        else
+		        {
+		            output.print(obj.toString());
+		        }
+
+				return;
 			}
-			
+
 			default: {
 				Object obj = dataRow.getObject(columnName);
-				return (obj == null) ? "NULL" : obj.toString();
+				nullOrToString(obj, output);
+                return;
 			}
 		}
 	}
 
+	static void nullOrToString(Object obj, PrintStream output)
+	{
+        if (obj == null)
+        {
+            output.print("NULL");
+        }
+        else
+        {
+            output.print(obj.toString());
+        }
+	}
 
 	/**
 	 * this is a tricky one. according to
@@ -170,32 +223,60 @@ public class Column {
 	 tested, mysql detects and imports hex encoded fields automatically.
 
 	 * @param blob Blob which we will convert to hex encoded string
-	 * @return String representation of binary data
+	 * @throws IOException on error reading from stream
 	 */
-	public static String processBinaryData(Blob blob) throws SQLException {
-		if (blob == null) {
-			return "NULL";
-		}
-		int blobLength =  (int) blob.length();
-		if (blobLength == 0) {
-			return "NULL";
-		}
-		byte[] bytes = blob.getBytes(1L, blobLength);
+	public static void processBinaryData(InputStream blob, PrintStream output) throws SQLException, IOException
+	{
+        long size = 0;
+	    try
+	    {
+            if (blob == null)
+            {
+                output.print("NULL");
+                return;
+		    }
 
-		return "decode('"+new String(Hex.encodeHex(bytes)).toUpperCase()+"', 'hex')";
+            output.print("decode('");
+
+    		byte[] buf = new byte[2048];
+    		int len;
+    		while ((len = blob.read(buf)) > 0)
+    		{
+    		    size += len;
+    		    byte[] value = buf;
+    		    if (len != buf.length)
+    		    {
+    		        value = new byte[len];
+    		    }
+
+    		    System.arraycopy(buf, 0, value, 0, len);
+
+    		    output.print(Hex.encodeHex(value, false));
+    		}
+
+		    output.print("', 'hex')");
+	    }
+	    catch (EOFException e)
+	    {
+	        System.err.println("Error at size: " + size);
+	        throw e;
+	    }
 	}
 
 	/**
 	 * @param data Clob to process and encode
 	 * @return String representation of Clob.
 	 */
-	static String processClobData(Clob data) {
+	static void processClobData(Clob data, PrintStream output) {
 		if (data == null)
-			return "NULL";
+		{
+            output.print("NULL");
+            return;
+        }
 
         try (Reader br = new BufferedReader(data.getCharacterStream()))
         {
-            return processStringData(IOUtils.toString(br));
+            processStringData(IOUtils.toString(br), output);
         }
         catch (SQLException | IOException e)
         {
@@ -207,11 +288,16 @@ public class Column {
 	 * @param data String to process
 	 * @return String representation of string data after escaping.
 	 */
-	private static String processStringData(String data) {
+	private static void processStringData(Object data, PrintStream output) {
 		if (data == null)
-			return "NULL";
+		{
+			output.print("NULL");
+    		return;
+    	}
 
-		return "'" + escapeQuotes(data) + "'";
+		output.print("'");
+		output.print(escapeQuotes(data.toString()));
+		output.print("'");
 	}
 
 	/**

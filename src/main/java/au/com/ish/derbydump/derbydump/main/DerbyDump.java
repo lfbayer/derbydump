@@ -61,13 +61,13 @@ public class DerbyDump
     {
         // creating a skeleton of tables and columns present in the database
         MetadataReader metadata = new MetadataReader();
-        System.err.println("Resolving database structure...");
+        System.err.println("Resolving database structure (" + schema + ")...");
 
         new EmbeddedDriver();
 
         try (Connection connection = DriverManager.getConnection(config.getDerbyUrl()))
         {
-            Database database = metadata.readDatabase(connection);
+            Database database = metadata.readDatabase(connection, schema);
             getInternalData(database.getTables(), connection, schema);
         }
     }

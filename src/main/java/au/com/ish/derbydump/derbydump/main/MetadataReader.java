@@ -60,16 +60,17 @@ public class MetadataReader {
         columnsForColumn.add(new MetaDataColumnDescriptor("REMARKS",        Types.VARCHAR));
     }
     
-    public Database readDatabase(Connection conn) {
+    public Database readDatabase(Connection conn, String schema) {
+        String schemaUpper = schema.toUpperCase();
         Database database = new Database();
         database.setDatabaseName("mydatabase");
         try{
             
             DatabaseMetaData dmd = conn.getMetaData();
-            ResultSet tables = dmd.getTables(null, null, null, new String[]{"TABLE"});
+            ResultSet tables = dmd.getTables(null, schemaUpper, null, new String[]{"TABLE"});
             while (tables.next()) {
                 Map values = readMetaData(tables, _columnsForTable);
-                Table table = readTable(dmd, values);
+                Table table = readTable(dmd, schemaUpper, values);
                 System.err.println("Found table: " + table.getTableName());
 
 				database.addTable(table);
@@ -90,20 +91,20 @@ public class MetadataReader {
         return values;
     }
     
-    Table readTable(DatabaseMetaData metaData, Map values) throws SQLException {
+    Table readTable(DatabaseMetaData metaData, String schema, Map values) throws SQLException {
         String tableName = (String)values.get("TABLE_NAME");
         Table table = null;
         
         if ((tableName != null) && (tableName.length() > 0)) {
             table = new Table();
             table.setTableName(tableName);
-	        table.addColumns(readColumns(metaData, tableName));
+	        table.addColumns(readColumns(metaData, schema, tableName));
         }
         return table;
     }
     
-    List<Column> readColumns(DatabaseMetaData metaData, String tableName) throws SQLException {
-        ResultSet columnData = metaData.getColumns(null, null, escapeForSearch(metaData, tableName), "%");
+    List<Column> readColumns(DatabaseMetaData metaData, String schema, String tableName) throws SQLException {
+        ResultSet columnData = metaData.getColumns(null, schema, escapeForSearch(metaData, tableName), "%");
 	    List<Column> columns = new ArrayList<Column>();
 
 	    while (columnData.next()) {
